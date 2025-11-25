@@ -9,6 +9,7 @@ import {
   deleteDoc,
 } from "firebase/firestore";
 import { auth, db } from "../firebase/config";
+import GameSessionItem from "../components/GameSessionItem";
 
 export default function Aventuras() {
   const [user, setUser] = useState(null);
@@ -16,14 +17,15 @@ export default function Aventuras() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // 🔹 Detecta usuario logueado
   useEffect(() => {
-    // Esperar a que firebase informe el usuario (evita currentUser null)
     const unsubAuth = onAuthStateChanged(auth, (u) => {
       setUser(u);
     });
     return () => unsubAuth();
   }, []);
 
+  // 🔹 Escucha y carga aventuras según el usuario
   useEffect(() => {
     if (!user) {
       setAventuras([]);
@@ -45,48 +47,43 @@ export default function Aventuras() {
         try {
           const items = snapshot.docs.map((docSnap) => {
             const d = docSnap.data();
-
-            // sessionJson puede ser string o ya objeto
+            const raw = d.sessionJson;
             let parsed = {};
-            if (d.sessionJson) {
+
+            // 🔹 Convertir JSON string → Objeto
+            if (raw) {
               try {
-                parsed =
-                  typeof d.sessionJson === "string"
-                    ? JSON.parse(d.sessionJson)
-                    : d.sessionJson;
+                parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
               } catch (e) {
-                // si parse falla, lo guardamos en summary crudo
-                console.warn("Error parseando sessionJson:", e);
-                parsed = { summary: "Contenido inválido", gameName: "Sin título" };
+                console.error("Error parseando sessionJson:", e);
+                parsed = {};
               }
             }
 
-            // lastUpdated puede venir como número (ms), string, o dentro de parsed
-            let updatedAtDate = null;
-            const possible = d.updatedAt ?? parsed.lastUpdated ?? parsed.updatedAt;
-
-            if (possible instanceof Object && possible.toDate) {
-              // Si es Timestamp de Firestore
-              updatedAtDate = possible.toDate();
-            } else if (typeof possible === "number") {
-              updatedAtDate = new Date(possible);
-            } else if (typeof possible === "string") {
-              const n = Number(possible);
-              updatedAtDate = !Number.isNaN(n) ? new Date(n) : new Date(possible);
-            } else {
-              updatedAtDate = new Date(); // fallback: ahora
-            }
+            // 🔹 Timestamp
+            const ts = parsed.metadata?.lastUpdated || d.updatedAt || Date.now();
+            const updatedAtDate =
+              typeof ts === "number"
+                ? new Date(ts)
+                : ts?.toDate
+                ? ts.toDate()
+                : new Date();
 
             return {
               id: docSnap.id,
-              titulo: parsed.gameName || d.gameName || "Sin título",
-              descripcion: parsed.summary || d.summary || "",
+              titulo:
+                parsed.metadata?.gameName ||
+                d.gameName ||
+                "Sin título",
+              descripcion:
+                parsed.metadata?.summary ||
+                d.summary ||
+                "Sin descripción",
               updatedAt: updatedAtDate,
-              raw: d,
             };
           });
 
-          // ordenar por fecha desc
+          // 🔹 Ordernar por fecha
           items.sort((a, b) => b.updatedAt - a.updatedAt);
 
           setAventuras(items);
@@ -107,16 +104,24 @@ export default function Aventuras() {
     return () => unsub();
   }, [user]);
 
+  // 🔹 Eliminar aventura
   const handleEliminar = async (id) => {
-    if (!confirm("¿Eliminar esta partida? Esta acción no se puede deshacer.")) return;
+    if (!confirm("¿Eliminar esta partida?")) return;
     try {
       await deleteDoc(doc(db, "game_sessions", id));
     } catch (err) {
-      console.error("Error eliminando partida:", err);
+      console.error("Error eliminando:", err);
       alert("No se pudo eliminar la partida.");
     }
   };
 
+  // 🔹 Abrir aventura (luego irá navegación)
+  const handleAbrir = (item) => {
+    console.log("👉 Abrir partida:", item.id);
+    alert(`Abrir partida: ${item.titulo}`);
+  };
+
+  // 🔹 Interfaz
   if (loading) return <p>Cargando partidas...</p>;
   if (!user) return <p>Iniciá sesión para ver tus aventuras.</p>;
   if (error) return <p style={{ color: "red" }}>{error}</p>;
@@ -129,47 +134,14 @@ export default function Aventuras() {
         <p>No tenés aventuras todavía 😔</p>
       ) : (
         aventuras.map((a) => (
-          <div key={a.id} className="aventura-card" style={cardStyle}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <div>
-                <h3 style={{ margin: "0 0 6px 0" }}>{a.titulo}</h3>
-                <p style={{ margin: 0 }}>{a.descripcion}</p>
-                <small style={{ color: "#bbb" }}>
-                  Actualizado: {a.updatedAt.toLocaleString()}
-                </small>
-              </div>
-
-              <div>
-                <button
-                  onClick={() => handleEliminar(a.id)}
-                  title="Eliminar"
-                  style={deleteBtnStyle}
-                >
-                  🗑
-                </button>
-              </div>
-            </div>
-          </div>
+          <GameSessionItem
+            key={a.id}
+            aventura={a}
+            onClick={handleAbrir}
+            onDelete={handleEliminar}
+          />
         ))
       )}
     </div>
   );
 }
-
-/* estilos inline mínimos (sustituir por tu CSS/Tailwind) */
-const cardStyle = {
-  background: "rgba(0,0,0,0.45)",
-  borderRadius: 12,
-  padding: 16,
-  marginBottom: 12,
-  color: "#fff",
-  border: "1px solid rgba(255,255,255,0.06)",
-};
-
-const deleteBtnStyle = {
-  background: "transparent",
-  border: "none",
-  cursor: "pointer",
-  fontSize: 18,
-  color: "#ff6b6b",
-};
