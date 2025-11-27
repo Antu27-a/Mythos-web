@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../firebase/config"; // Asegúrate de importar auth
 import { useNavigate } from "react-router-dom";
+import "./Login.css";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -25,7 +26,7 @@ export default function Login() {
       // Intentar iniciar sesión
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
-      
+
       console.log("Usuario autenticado:", user); // Verificar el objeto de usuario
 
       if (user) {
@@ -39,28 +40,30 @@ export default function Login() {
   };
 
   return (
-    <form onSubmit={handleLogin}>
-      <h2>Iniciar Sesión</h2>
+    <div >
+      <form className="login-form" onSubmit={handleLogin}>
+        <h2>Iniciar Sesión</h2>
 
-      {error && <p style={{ color: "red" }}>{error}</p>}
+        {error && <p>{error}</p>}
 
-      <input
-        type="email"
-        placeholder="Correo electrónico"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        required
-      />
+        <input
+          type="email"
+          placeholder="Correo electrónico"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+        />
 
-      <input
-        type="password"
-        placeholder="Contraseña"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        required
-      />
+        <input
+          type="password"
+          placeholder="Contraseña"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+        />
 
-      <button type="submit">Ingresar</button>
-    </form>
+        <button type="submit">Ingresar</button>
+      </form>
+    </div>
   );
 }
